@@ -860,5 +860,3 @@ implementation ("com.squareup.okhttp3:logging-interceptor:4.12.0")
 ```
 추가
 
-Tab3Activity.java
-전체 수정 복붙
