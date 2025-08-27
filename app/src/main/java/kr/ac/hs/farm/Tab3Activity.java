@@ -27,8 +27,14 @@ import android.view.View;
 public class Tab3Activity extends AppCompatActivity {
 
     private static final int REQUEST_IMAGE_CAPTURE = 1;
-    private ProgressBar[] progressBars = new ProgressBar[13];
-    private Button[] claimButtons = new Button[13];
+
+    // 퀘스트 개수만 바꾸면 됨!
+    private static final int QUEST_COUNT = 23;
+
+    private ProgressBar[] progressBars;
+    private Button[] claimButtons;
+    private ImageView[] boxImages;
+
     private ImageView imagePreview;
 
     @Override
@@ -44,33 +50,13 @@ public class Tab3Activity extends AppCompatActivity {
             return insets;
         });
 
-        progressBars[0] = findViewById(R.id.progressQuest1);
-        progressBars[1] = findViewById(R.id.progressQuest2);
-        progressBars[2] = findViewById(R.id.progressQuest3);
-        progressBars[3] = findViewById(R.id.progressQuest4);
-        progressBars[4] = findViewById(R.id.progressQuest5);
-        progressBars[5] = findViewById(R.id.progressQuest6);
-        progressBars[6] = findViewById(R.id.progressQuest7);
-        progressBars[7] = findViewById(R.id.progressQuest8);
-        progressBars[8] = findViewById(R.id.progressQuest9);
-        progressBars[9] = findViewById(R.id.progressQuest10);
-        progressBars[10] = findViewById(R.id.progressQuest11);
-        progressBars[11] = findViewById(R.id.progressQuest12);
-        progressBars[12] = findViewById(R.id.progressQuest13);
 
-        claimButtons[0] = findViewById(R.id.btnClaim1);
-        claimButtons[1] = findViewById(R.id.btnClaim2);
-        claimButtons[2] = findViewById(R.id.btnClaim3);
-        claimButtons[3] = findViewById(R.id.btnClaim4);
-        claimButtons[4] = findViewById(R.id.btnClaim5);
-        claimButtons[5] = findViewById(R.id.btnClaim6);
-        claimButtons[6] = findViewById(R.id.btnClaim7);
-        claimButtons[7] = findViewById(R.id.btnClaim8);
-        claimButtons[8] = findViewById(R.id.btnClaim9);
-        claimButtons[9] = findViewById(R.id.btnClaim10);
-        claimButtons[10] = findViewById(R.id.btnClaim11);
-        claimButtons[11] = findViewById(R.id.btnClaim12);
-        claimButtons[12] = findViewById(R.id.btnClaim13);
+        progressBars = new ProgressBar[QUEST_COUNT];
+        claimButtons = new Button[QUEST_COUNT];
+        boxImages   = new ImageView[QUEST_COUNT];
+
+
+        initQuestViews();
 
         imagePreview = findViewById(R.id.imagePreview);
         Button buttonTakePhoto = findViewById(R.id.buttonTakePhoto);
@@ -82,13 +68,7 @@ public class Tab3Activity extends AppCompatActivity {
             }
         });
 
-        for (int i = 0; i < claimButtons.length; i++) {
-            final int index = i;
-            claimButtons[i].setOnClickListener(v -> {
-                claimQuest(index + 1);
-            });
-        }
-
+        // 하단 탭
         findViewById(R.id.tab1Button).setOnClickListener(view -> startActivity(new Intent(this, MainActivity.class)));
         findViewById(R.id.tab2Button).setOnClickListener(view -> startActivity(new Intent(this, Tab2Activity.class)));
         findViewById(R.id.tab3Button).setOnClickListener(view -> startActivity(new Intent(this, Tab3Activity.class)));
@@ -96,6 +76,31 @@ public class Tab3Activity extends AppCompatActivity {
         findViewById(R.id.tab6Button).setOnClickListener(view -> startActivity(new Intent(this, Tab6Activity.class)));
 
         loadQuestProgressFromServer();
+    }
+
+
+    private void initQuestViews() {
+        for (int i = 0; i < QUEST_COUNT; i++) {
+            int idx = i + 1;
+
+            int progId = getResIdByName("progressQuest" + idx);
+            int btnId  = getResIdByName("btnClaim" + idx);
+            int boxId  = getResIdByName("boxReward" + idx);
+
+            if (progId != 0) progressBars[i] = findViewById(progId);
+            if (btnId  != 0) claimButtons[i] = findViewById(btnId);
+            if (boxId  != 0) boxImages[i]    = findViewById(boxId);
+
+            // 버튼 리스너
+            final int questNumber = idx;
+            if (claimButtons[i] != null) {
+                claimButtons[i].setOnClickListener(v -> claimQuest(questNumber));
+            }
+        }
+    }
+
+    private int getResIdByName(String name) {
+        return getResources().getIdentifier(name, "id", getPackageName());
     }
 
     private void loadQuestProgressFromServer() {
@@ -146,9 +151,13 @@ public class Tab3Activity extends AppCompatActivity {
                         int reward = result.getReward();
                         Toast.makeText(Tab3Activity.this, "보상으로 먹이 " + reward + "개를 받았습니다!", Toast.LENGTH_SHORT).show();
 
-                        // 상자 열기 애니메이션 적용
-                        int boxId = getResources().getIdentifier("boxReward" + questNumber, "id", getPackageName());
-                        ImageView box = findViewById(boxId);
+
+                        int index = questNumber - 1;
+                        ImageView box = (index >= 0 && index < boxImages.length) ? boxImages[index] : null;
+                        if (box == null) {
+                            int boxId = getResIdByName("boxReward" + questNumber);
+                            if (boxId != 0) box = findViewById(boxId);
+                        }
                         if (box != null) {
                             box.setImageResource(R.drawable.box_opened);
                             Animation fadeIn = AnimationUtils.loadAnimation(Tab3Activity.this, R.anim.fade_open);
@@ -175,28 +184,44 @@ public class Tab3Activity extends AppCompatActivity {
     }
 
     private void updateQuestUI(List<QuestProgressResponse.Quest> quests) {
-        for (int i = 0; i < Math.min(quests.size(), 13); i++) {
+        if (quests == null) return;
+
+        int count = Math.min(quests.size(), QUEST_COUNT);
+        for (int i = 0; i < count; i++) {
             QuestProgressResponse.Quest q = quests.get(i);
-            double target = q.getTarget();
-            int percent = (target > 0) ? (int) ((q.getProgress() / target) * 100) : 0;
-            progressBars[i].setProgress(percent);
-            claimButtons[i].setEnabled(q.isCompleted());
+            ProgressBar bar = progressBars[i];
+            Button btn = claimButtons[i];
+
+            if (bar != null) {
+                double target = q.getTarget();
+                int percent = (target > 0) ? (int) ((q.getProgress() / target) * 100) : 0;
+                if (percent < 0) percent = 0;
+                if (percent > 100) percent = 100;
+                bar.setProgress(percent);
+            }
+            if (btn != null) {
+                btn.setEnabled(q.isCompleted());
+            }
         }
 
         for (QuestProgressResponse.Quest q : quests) {
             if ("kcal".equals(q.getType())) {
                 int progress = (int) q.getProgress();
-                if (progress >= 100) {
-                    progressBars[6].setProgress(100);
-                    claimButtons[6].setEnabled(true);
+
+                // 100 kcal → 7번
+                if (progress >= 100 && 6 < QUEST_COUNT) {
+                    if (progressBars[6] != null) progressBars[6].setProgress(100);
+                    if (claimButtons[6] != null) claimButtons[6].setEnabled(true);
                 }
-                if (progress >= 200) {
-                    progressBars[7].setProgress(100);
-                    claimButtons[7].setEnabled(true);
+                // 200 kcal → 8번
+                if (progress >= 200 && 7 < QUEST_COUNT) {
+                    if (progressBars[7] != null) progressBars[7].setProgress(100);
+                    if (claimButtons[7] != null) claimButtons[7].setEnabled(true);
                 }
-                if (progress >= 400) {
-                    progressBars[8].setProgress(100);
-                    claimButtons[8].setEnabled(true);
+                // 400 kcal → 9번
+                if (progress >= 400 && 8 < QUEST_COUNT) {
+                    if (progressBars[8] != null) progressBars[8].setProgress(100);
+                    if (claimButtons[8] != null) claimButtons[8].setEnabled(true);
                 }
             }
         }
@@ -207,7 +232,9 @@ public class Tab3Activity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK && data != null) {
             Bitmap imageBitmap = (Bitmap) data.getExtras().get("data");
-            imagePreview.setImageBitmap(imageBitmap);
+            if (imageBitmap != null && imagePreview != null) {
+                imagePreview.setImageBitmap(imageBitmap);
+            }
         }
     }
 }
